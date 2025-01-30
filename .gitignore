@@ -16,6 +16,7 @@ package-lock.json
 *.npy
 !calibration_image_sample_data_20x128x128x3.npy
 *.txt
+!requirements.txt
 *.engine
 *.profile
 saved_model/
