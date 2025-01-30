@@ -55,7 +55,7 @@ def check_output(output_data):
 # Post-process the output to extract bounding boxes (Optional)
 
 
-def post_process(output_data, conf_threshold=0.5):
+def post_process(output_data, original_image, conf_threshold=0.5, iou_threshold=0.4):
     # Inspect output data shape
     # check_output(output_data)
 
@@ -72,44 +72,66 @@ def post_process(output_data, conf_threshold=0.5):
     class_ids = np.argmax(class_probs, axis=1)
     scores = np.max(class_probs, axis=1)  # Get the max probability as score
 
+    image_shape = original_image.shape
+
     # Filter out low-confidence boxes
-    valid_boxes = {}
+    detected_boxes = []
+    detected_scores = []
+    detected_classes = []
     for i in range(len(scores)):
         if scores[i] > conf_threshold:
             box = boxes[i]
+            
+            # 🔥 Correct Scaling 🔥
+            x1 = int(boxes[i][0] * image_shape[1])
+            y1 = int(boxes[i][1] * image_shape[0])
+            x2 = int(boxes[i][2] * image_shape[1])
+            y2 = int(boxes[i][3] * image_shape[0])
+
+            # Ensure coordinates stay within image bounds
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(image_shape[1] - 1, x2), min(image_shape[0] - 1, y2)
+
             score = scores[i]
             class_id = class_ids[i]
-            if class_id not in valid_boxes or score > valid_boxes[class_id]["score"]:
-                # Include class ID for display
-                valid_boxes[class_id] = {"box": box, "score": score}
-                print(
-                    f"Found {class_id}, {round(score * 100000) / 1000}% {box}")
+            detected_boxes.append([x1, y1, x2, y2])
+            detected_scores.append(float(score))
+            detected_classes.append(class_id)
+            print(
+                f"Found {class_id}, {round(score * 100000) / 1000}% {box}")
 
-    return valid_boxes
+    # Apply Non-Maximum Suppression (NMS)
+    indices = cv2.dnn.NMSBoxes(detected_boxes, detected_scores, conf_threshold, iou_threshold)
+
+    final_boxes, final_scores, final_classes = [], [], []
+    if len(indices) > 0:
+        for i in indices.flatten():
+            final_boxes.append(detected_boxes[i])
+            final_scores.append(detected_scores[i])
+            final_classes.append(detected_classes[i])
+            print(f"supp.{i}: {detected_classes[i]}, {round(detected_scores[i] * 100000) / 1000}% {detected_boxes[i]}")
+
+    return final_boxes, final_scores, final_classes
 
 # Display results (bounding boxes on the image)
 
 
-def display_results(original_image, valid_boxes, class_names):
+def display_results(original_image, boxes, scores, class_names):
     # Get original image dimensions
     h, w, _ = original_image.shape
 
     image = original_image.copy()
-    for class_id, dict in valid_boxes.items():
-        x1, y1, x2, y2 = dict["box"]
-        score = dict["score"]
-
-        # Rescale the bounding box coordinates back to the original image size
-        x1 = int(x1 * w)
-        y1 = int(y1 * h)
-        x2 = int(x2 * w)
-        y2 = int(y2 * h)
+    for i in range(len(boxes)):
+    
+        x1, y1, x2, y2 = boxes[i]
+        score = scores[i]
+        class_name = class_names[i]
 
         # Draw the bounding box and label
         cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(
             image,
-            f"Conf: {score:.2f} {class_names[class_id]}",
+            f"Conf: {score:.2f} {class_name}",
             (x1, y1-10),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
@@ -132,8 +154,13 @@ def load_class_names():
 # Example usage
 image_path = "./data/test.png"
 class_names = load_class_names()  # Load the class names
+print(class_names)
 
 output_data, original_image = run_inference(image_path)
-# Lowered confidence threshold for testing
-valid_boxes = post_process(output_data, conf_threshold=0.60)
-display_results(original_image, valid_boxes, class_names)
+
+# Process output and get final detections
+boxes, scores, class_ids = post_process(output_data, original_image, conf_threshold=0.60)
+
+classes=[class_names[class_id] for class_id in class_ids]
+
+display_results(original_image, boxes, scores, classes)
