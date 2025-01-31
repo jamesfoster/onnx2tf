@@ -7,22 +7,29 @@ onnx2tf/saved_model/
 __pycache__/
 test.py
 
-package-lock.json
-*.gif
-
-*.onnx
-!make_test_op/ops/*.onnx
-*.tflite
-*.npy
-!calibration_image_sample_data_20x128x128x3.npy
-*.txt
-!requirements.txt
-*.engine
-*.profile
 saved_model/
 node_modules/
+
+package-lock.json
 
 .act.secrets
 .act.env
 
+*.gif
 *.sarif
+
+*.txt
+!requirements.txt
+
+*.onnx
+!make_test_op/ops/*.onnx
+
+*.tflite
+
+*.npy
+!calibration_image_sample_data_20x128x128x3.npy
+
+*.engine
+*.profile
+
+*:Zone.Identifier
